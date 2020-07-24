@@ -1,0 +1,4 @@
+#hexdump view txt register
+sudo hexdump -v  -C -s 0xfed30000 /dev/mem | head
+#hexdump clone view txt register
+gcc hexdump.c ; sudo ./a.out /dev/mem | head
