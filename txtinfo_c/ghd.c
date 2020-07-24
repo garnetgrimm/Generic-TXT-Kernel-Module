@@ -1,7 +1,9 @@
+/* usage: hexdump <file-in> [file-out] */
+
 #include <stdio.h>
 
+#define TXT_REGISTER 0xfed30000
 #define CHUNK 16
-#define TXT_REGISTER 0xFED30000
 
 int main(int argc, char const *argv[]) {
     FILE *fp_in;
@@ -9,21 +11,22 @@ int main(int argc, char const *argv[]) {
     unsigned char buf[CHUNK];
     size_t nread;
     int i, c, npos;
-    int line;
 
-    /* open the input file */
-    FILE *fp_in;
-    if (!(fp = fopen(path, mode))) {
-        printf("error opening '%s'", path);
-        return 1;
+    if (!(fp_in = fopen("/dev/mem", "r"))) {
+        printf("error opening /dev/mem  \n");
+        return 0;
     }
+
+
+    //fp_out = (argc == 3 ? hexdump_open(argv[2], "w") : stdout);
+    fp_out = stdout;
     
-    line = 0;
     npos = TXT_REGISTER;
-    fseek(fp_in, npos, SEEK_SET);
-    
+    fseek(fp_in, TXT_REGISTER, SEEK_SET);
+ 
+    /* display hex data CHUNK bytes at a time */
     while ((nread = fread(buf, 1, sizeof buf, fp_in)) > 0) {
-	fprintf(fp_out, "%04x: ", npos);
+        fprintf(fp_out, "%04x: ", npos);
         npos += CHUNK;
 
         /* print hex values e.g. 3f 62 ec f0*/
