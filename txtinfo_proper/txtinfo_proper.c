@@ -12,10 +12,10 @@
 #include <asm/uaccess.h>
 #include <linux/fs.h>
 
-#define TXT_PUB_CR_BASE	    0xfed30000
-#define TXT_PUB_CR_SIZE	    0x10000
-#define TXT_PUB_CR_INDEX    0
-#define DEMO_ERROR 0xc0008004
+#define TXT_PUB_CONFIG_REGS_BASE  0xfed30000
+#define TXT_PRIV_CONFIG_REGS_BASE 0xfed20000
+#define TXT_NR_CONFIG_PAGES ((TXT_PUB_CONFIG_REGS_BASE - TXT_PRIV_CONFIG_REGS_BASE) >> PAGE_SHIFT)
+
 #define TXT_STS_OFFSET		0x000
 #define TXT_ESTS_OFFSET		0x008
 #define TXT_ERRORCODE_OFFSET	0x030
@@ -69,6 +69,8 @@ static const struct file_operations log_ops = {
 };
 static int __init start_security(void)
 {
+	void __iomem *txt;
+
 	strncpy(msg_buffer, EXAMPLE_MSG, MSG_BUFFER_LEN);
 	msg_ptr = msg_buffer;
 	printk(KERN_INFO "Starting security module...\n");
@@ -76,7 +78,16 @@ static int __init start_security(void)
 	folder = securityfs_create_dir("supersecret",NULL);
 	file = securityfs_create_file("logfile", S_IRUSR | S_IRGRP, folder, NULL, &log_ops); 
 	printk(KERN_INFO "Started security module success!\n");
-
+	printk(KERN_INFO "Getting txt data\n");
+	
+	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES * PAGE_SIZE);	
+	if(!txt) {
+		printk(KERN_INFO "Error with early_ioremap\n");
+	}
+	printk(KERN_INFO "got info: %x\n", readl(txt));
+	iounmap(txt);
+	printk(KERN_INFO "successfully mapped txt data\n");
+	
 	return 0;
 }
 
