@@ -44,6 +44,20 @@ static ssize_t log_write(struct file *file, const char __user *buf, size_t datal
 	return -EINVAL;
 }
 
+static u64 get_txt_info(unsigned int offset) {
+	void __iomem *txt;
+	u64 sample;
+	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES * PAGE_SIZE);	
+	if(!txt) {
+		printk(KERN_INFO "Error with ioremap\n");
+	}
+	memcpy_fromio(&sample, txt + offset, sizeof(u64)); 
+	printk(KERN_INFO "got info: 0x%08llx\n", sample);
+	iounmap(txt);
+	printk(KERN_INFO "successfully mapped txt data\n");
+	return sample;	
+}
+
 /* When a process reads from our device, this gets called. */
 static ssize_t log_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {
  int bytes_read = 0;
@@ -69,7 +83,6 @@ static const struct file_operations log_ops = {
 };
 static int __init start_security(void)
 {
-	void __iomem *txt;
 
 	strncpy(msg_buffer, EXAMPLE_MSG, MSG_BUFFER_LEN);
 	msg_ptr = msg_buffer;
@@ -80,14 +93,7 @@ static int __init start_security(void)
 	printk(KERN_INFO "Started security module success!\n");
 	printk(KERN_INFO "Getting txt data\n");
 	
-	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES * PAGE_SIZE);	
-	if(!txt) {
-		printk(KERN_INFO "Error with early_ioremap\n");
-	}
-	printk(KERN_INFO "got info: %x\n", readl(txt));
-	iounmap(txt);
-	printk(KERN_INFO "successfully mapped txt data\n");
-	
+	get_txt_info(0x0);
 	return 0;
 }
 
