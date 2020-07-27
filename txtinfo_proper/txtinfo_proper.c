@@ -11,7 +11,7 @@
  * | TXT.SCRATCHPAD | ACM_POLICY_STATUS          |   64 | B.1.16         |
  * | TXT.E2STS      | Extended Error Status      |   64 | B.1.24         |
  * +----------------+----------------------------+------+----------------+
- * /
+*/
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -59,19 +59,21 @@ static ssize_t log_write(struct file *file, const char __user *buf, size_t datal
 	return -EINVAL;
 }
 
-static u64 get_txt_info(unsigned int offset) {
+static u64 get_txt_info(unsigned int offset, int size) {
 	void __iomem *txt;
 	u64 sample;
 	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES * PAGE_SIZE);	
 	if(!txt) {
 		printk(KERN_INFO "Error with ioremap\n");
 	}
-	memcpy_fromio(&sample, txt + offset, sizeof(u64)); 
+	memcpy_fromio(&sample, txt + offset, size); 
 	printk(KERN_INFO "got info: 0x%08llx\n", sample);
 	iounmap(txt);
 	printk(KERN_INFO "successfully mapped txt data\n");
 	return sample;	
 }
+
+
 
 /* When a process reads from our device, this gets called. */
 static ssize_t log_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {
@@ -108,7 +110,7 @@ static int __init start_security(void)
 	printk(KERN_INFO "Started security module success!\n");
 	printk(KERN_INFO "Getting txt data\n");
 	
-	get_txt_info(0x0);
+	get_txt_info(0x0, sizeof(64));
 	return 0;
 }
 
