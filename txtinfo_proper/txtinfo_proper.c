@@ -42,12 +42,13 @@
 #define MSG_BUFFER_LEN 15
 
 #define DECLARE_PUB_SHOW(reg_name, reg_offset, reg_size)					\
-static ssize_t name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
-	get_txt_info(offset, size);								\
+static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
+	get_txt_info(reg_offset, reg_size);							\
 	return read_to_user(buffer, len);							\
 }												\
-static const struct file_operations name##_ops = {						\
-	.read = name##_read									\
+static const struct file_operations reg_name##_ops = {						\
+	.read = reg_name##_read,								\
+	.write = log_write									\
 };
 
 MODULE_LICENSE("GPL");
@@ -112,7 +113,6 @@ static int __init start_security(void)
 	folder = securityfs_create_dir("supersecret",NULL);
 	file = securityfs_create_file("logfile", S_IRUSR | S_IRGRP, folder, NULL, &sts_ops); 
 	printk(KERN_INFO "Started security module success!\n");
-	printk(KERN_INFO "Getting txt data\n");
 	
 	return 0;
 }
