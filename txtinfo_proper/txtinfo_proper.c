@@ -41,8 +41,7 @@
 #define TXT_SCRATCHPAD_OFFSET	0x378
 #define TXT_E2STS_OFFSET	0x8f0
 
-#define EXAMPLE_MSG "Hello, World!\n"
-#define MSG_BUFFER_LEN 12
+#define MSG_BUFFER_LEN 16
 
 #define DECLARE_PUB_SHOW(reg_name, reg_offset, reg_size)					\
 static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
@@ -55,19 +54,17 @@ static const struct file_operations reg_name##_ops = {						\
 };
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Garnet (GBOI) Grimm");
-MODULE_DESCRIPTION("Expose securityfs.");
+MODULE_AUTHOR("Garnet Grimm");
+MODULE_DESCRIPTION("Expose txt registers to userspace via securityfs.");
 MODULE_VERSION("0.01");
 
 static struct dentry *fs_entries[SL_FS_ENTRIES];
 
 static char msg_buffer[MSG_BUFFER_LEN];
-static char *msg_ptr;
 
 void __iomem *txt;
 
 static ssize_t log_write(struct file *file, const char __user *buf, size_t datalen, loff_t *ppos) {
-	printk(KERN_INFO "WRITIN\n");
 	return -EINVAL;
 }
 
@@ -79,9 +76,7 @@ static u64 get_txt_info(unsigned int offset, int size) {
 		printk(KERN_INFO "Error with ioremap\n");
 	}
 	memcpy_fromio(&sample, txt + offset, size); 
-	printk(KERN_INFO "got info: 0x%08llx\n", sample);
 	iounmap(txt);
-	printk(KERN_INFO "successfully mapped txt data\n");
 	snprintf(msg_buffer, MSG_BUFFER_LEN, "0x%08llx\n", sample);
 	return sample;	
 }
@@ -96,7 +91,6 @@ DECLARE_PUB_SHOW(e2sts,TXT_E2STS_OFFSET,sizeof(u64));
 
 static int __init start_security(void)
 {
-	snprintf(msg_buffer, MSG_BUFFER_LEN, EXAMPLE_MSG);
 	printk(KERN_INFO "Starting security module...\n");
 	fs_entries[SL_DIR_ENTRY] = securityfs_create_dir("securelaunch",NULL);
 	fs_entries[1] = securityfs_create_file("sts", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &sts_ops); 
