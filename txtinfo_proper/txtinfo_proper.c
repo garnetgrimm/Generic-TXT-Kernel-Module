@@ -80,6 +80,7 @@ static u64 get_txt_info(unsigned int offset, int size) {
 	printk(KERN_INFO "got info: 0x%08llx\n", sample);
 	iounmap(txt);
 	printk(KERN_INFO "successfully mapped txt data\n");
+	snprintf(msg_ptr, MSG_BUFFER_LEN, "0x%08llx\n", sample);
 	return sample;	
 }
 
@@ -105,7 +106,7 @@ DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,sizeof(u64));
 
 static int __init start_security(void)
 {
-
+	
 	strncpy(msg_buffer, EXAMPLE_MSG, MSG_BUFFER_LEN);
 	msg_ptr = msg_buffer;
 	printk(KERN_INFO "Starting security module...\n");
