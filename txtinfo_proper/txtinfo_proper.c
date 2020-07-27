@@ -1,13 +1,13 @@
 /*
  * This code exposes the following registers 
- * +----------------+----------------------------+------+----------------+
+  +----------------+----------------------------+------+----------------+
  * |    Register    |        Description         | Size | Manual Section |
  * +----------------+----------------------------+------+----------------+
  * | TXT.STS        | Status                     |   64 | B.1.1          |
- * | TXT.STS        | Error Status               |   64 | B.1.2          |
- * | TXT.ERRORCODE  | Error Code                 |   64 | B.1.3          |
+ * | TXT.STS        | Error Status               |   08 | B.1.2          |
+ * | TXT.ERRORCODE  | Error Code                 |   32 | B.1.3          |
  * | TXT.DIDVID     | TXT Device ID              |   64 | B.1.7          |
- * | TXT.VER.EMIF   | EMC Version Numer Register |   64 | B.1.8          |
+ * | TXT.VER.EMIF   | EMC Version Numer Register |   32 | B.1.8          |
  * | TXT.SCRATCHPAD | ACM_POLICY_STATUS          |   64 | B.1.16         |
  * | TXT.E2STS      | Extended Error Status      |   64 | B.1.24         |
  * +----------------+----------------------------+------+----------------+
