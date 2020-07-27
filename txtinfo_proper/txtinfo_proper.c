@@ -101,7 +101,7 @@ static int read_to_user(char *buffer, size_t len) {
  return bytes_read;
 }
 
-DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,64);
+DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,sizeof(u64));
 
 static int __init start_security(void)
 {
