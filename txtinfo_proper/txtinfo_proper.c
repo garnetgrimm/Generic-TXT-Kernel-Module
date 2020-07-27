@@ -41,6 +41,15 @@
 #define EXAMPLE_MSG "Hello, World!\n"
 #define MSG_BUFFER_LEN 15
 
+#define DECLARE_PUB_SHOW(reg_name, reg_offset, reg_size)					\
+static ssize_t name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
+	get_txt_info(offset, size);								\
+	return read_to_user(buffer, len);							\
+}												\
+static const struct file_operations name##_ops = {						\
+	.read = name##_read									\
+};
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Garnet (GBOI) Grimm");
 MODULE_DESCRIPTION("Expose securityfs.");
@@ -73,10 +82,7 @@ static u64 get_txt_info(unsigned int offset, int size) {
 	return sample;	
 }
 
-
-
-/* When a process reads from our device, this gets called. */
-static ssize_t log_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {
+static int read_to_user(char *buffer, size_t len) {
  int bytes_read = 0;
  /* If we’re at the end, loop back to the beginning */
  if (*msg_ptr == 0) {
@@ -94,10 +100,8 @@ static ssize_t log_read(struct file *flip, char *buffer, size_t len, loff_t *off
  return bytes_read;
 }
 
-static const struct file_operations log_ops = {
-	.write = log_write,
-	.read = log_read
-};
+DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,64);
+
 static int __init start_security(void)
 {
 
@@ -106,11 +110,10 @@ static int __init start_security(void)
 	printk(KERN_INFO "Starting security module...\n");
 	printk(KERN_INFO "Log is %p\n", (void *)msg_ptr);
 	folder = securityfs_create_dir("supersecret",NULL);
-	file = securityfs_create_file("logfile", S_IRUSR | S_IRGRP, folder, NULL, &log_ops); 
+	file = securityfs_create_file("logfile", S_IRUSR | S_IRGRP, folder, NULL, &sts_ops); 
 	printk(KERN_INFO "Started security module success!\n");
 	printk(KERN_INFO "Getting txt data\n");
 	
-	get_txt_info(0x0, sizeof(64));
 	return 0;
 }
 
