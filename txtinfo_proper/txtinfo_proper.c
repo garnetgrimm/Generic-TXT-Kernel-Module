@@ -4,7 +4,7 @@
  * |    Register    |        Description         | Size | Manual Section |
  * +----------------+----------------------------+------+----------------+
  * | TXT.STS        | Status                     |   64 | B.1.1          |
- * | TXT.STS        | Error Status               |   08 | B.1.2          |
+ * | TXT.ESTS       | Error Status               |   08 | B.1.2          |
  * | TXT.ERRORCODE  | Error Code                 |   32 | B.1.3          |
  * | TXT.DIDVID     | TXT Device ID              |   64 | B.1.7          |
  * | TXT.VER.EMIF   | EMC Version Numer Register |   32 | B.1.8          |
@@ -36,15 +36,15 @@
 #define TXT_DIDVID_OFFSET	0x110
 #define TXT_VER_EMIF_OFFSET	0x200
 #define TXT_SCRATCHPAD_OFFSET	0x378
-#define TXT_E2STS		0x8f0
+#define TXT_E2STS_OFFSET	0x8f0
 
 #define EXAMPLE_MSG "Hello, World!\n"
-#define MSG_BUFFER_LEN 15
+#define MSG_BUFFER_LEN 12
 
 #define DECLARE_PUB_SHOW(reg_name, reg_offset, reg_size)					\
 static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
-	int info = get_txt_info(reg_offset, reg_size);						\
-	return read_to_user(buffer, len, info);							\
+	get_txt_info(reg_offset, reg_size);							\
+	return simple_read_from_buffer(buffer, len, offset, &msg_buffer, MSG_BUFFER_LEN);	\
 }												\
 static const struct file_operations reg_name##_ops = {						\
 	.read = reg_name##_read,								\
@@ -81,24 +81,16 @@ static u64 get_txt_info(unsigned int offset, int size) {
 	iounmap(txt);
 	printk(KERN_INFO "successfully mapped txt data\n");
 	snprintf(msg_buffer, MSG_BUFFER_LEN, "0x%08llx\n", sample);
-	msg_ptr = msg_buffer;
 	return sample;	
 }
 
-static int read_to_user(char *buffer, size_t len, int info) {
-	int bytes_read = 0;
-	if (*msg_ptr == 0) {
-		return 0;
-	}
-	while (len && *msg_ptr) {
-		put_user(*(msg_ptr++), buffer++);
-		len--;
-		bytes_read++;
- 	}
-	return bytes_read;
-}
-
 DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,sizeof(u64));
+DECLARE_PUB_SHOW(ests,TXT_ESTS_OFFSET,sizeof(u8));
+DECLARE_PUB_SHOW(errorcode,TXT_ERRORCODE_OFFSET,sizeof(u32));
+DECLARE_PUB_SHOW(didvid,TXT_DIDVID_OFFSET,sizeof(u64));
+DECLARE_PUB_SHOW(ver_emif,TXT_VER_EMIF_OFFSET,sizeof(u32));
+DECLARE_PUB_SHOW(scratchpad,TXT_SCRATCHPAD_OFFSET,sizeof(u64));
+DECLARE_PUB_SHOW(e2sts,TXT_E2STS_OFFSET,sizeof(u64));
 
 static int __init start_security(void)
 {
@@ -108,16 +100,17 @@ static int __init start_security(void)
 	printk(KERN_INFO "Starting security module...\n");
 	printk(KERN_INFO "Log is %p\n", (void *)msg_ptr);
 	folder = securityfs_create_dir("supersecret",NULL);
-	file = securityfs_create_file("logfile", S_IRUSR | S_IRGRP, folder, NULL, &sts_ops); 
+	file = securityfs_create_file("sts", S_IRUSR | S_IRGRP, folder, NULL, &sts_ops); 
 	printk(KERN_INFO "Started security module success!\n");
 	
 	return 0;
 }
 
 static void __exit stop_security(void) {
-	printk(KERN_INFO "Ended security module\n");
+	printk(KERN_INFO "Ending security module...\n");
 	securityfs_remove(file);
 	securityfs_remove(folder);
+	printk(KERN_INFO "Succesfully ended security module\n");
 }
 
 module_init(start_security);
