@@ -43,8 +43,8 @@
 
 #define DECLARE_PUB_SHOW(reg_name, reg_offset, reg_size)					\
 static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
-	get_txt_info(reg_offset, reg_size);							\
-	return read_to_user(buffer, len);							\
+	int info = get_txt_info(reg_offset, reg_size);						\
+	return read_to_user(buffer, len, info);							\
 }												\
 static const struct file_operations reg_name##_ops = {						\
 	.read = reg_name##_read,								\
@@ -80,26 +80,22 @@ static u64 get_txt_info(unsigned int offset, int size) {
 	printk(KERN_INFO "got info: 0x%08llx\n", sample);
 	iounmap(txt);
 	printk(KERN_INFO "successfully mapped txt data\n");
-	snprintf(msg_ptr, MSG_BUFFER_LEN, "0x%08llx\n", sample);
+	snprintf(msg_buffer, MSG_BUFFER_LEN, "0x%08llx\n", sample);
+	msg_ptr = msg_buffer;
 	return sample;	
 }
 
-static int read_to_user(char *buffer, size_t len) {
- int bytes_read = 0;
- /* If we’re at the end, loop back to the beginning */
- if (*msg_ptr == 0) {
- 	//msg_ptr = msg_buffer;
-	return 0;
- }
- /* Put data in the buffer */
- while (len && *msg_ptr) {
- /* Buffer is in user data, not kernel, so you can’t just reference
- * with a pointer. The function put_user handles this for us */
- put_user(*(msg_ptr++), buffer++);
- len--;
- bytes_read++;
- }
- return bytes_read;
+static int read_to_user(char *buffer, size_t len, int info) {
+	int bytes_read = 0;
+	if (*msg_ptr == 0) {
+		return 0;
+	}
+	while (len && *msg_ptr) {
+		put_user(*(msg_ptr++), buffer++);
+		len--;
+		bytes_read++;
+ 	}
+	return bytes_read;
 }
 
 DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,sizeof(u64));
@@ -107,8 +103,8 @@ DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,sizeof(u64));
 static int __init start_security(void)
 {
 	
-	strncpy(msg_buffer, EXAMPLE_MSG, MSG_BUFFER_LEN);
-	msg_ptr = msg_buffer;
+	//strncpy(msg_buffer, EXAMPLE_MSG, MSG_BUFFER_LEN);
+	snprintf(msg_buffer, MSG_BUFFER_LEN, EXAMPLE_MSG);
 	printk(KERN_INFO "Starting security module...\n");
 	printk(KERN_INFO "Log is %p\n", (void *)msg_ptr);
 	folder = securityfs_create_dir("supersecret",NULL);
