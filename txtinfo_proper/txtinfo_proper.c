@@ -1,3 +1,17 @@
+/*
+ * This code exposes the following registers 
+ * +----------------+----------------------------+------+----------------+
+ * |    Register    |        Description         | Size | Manual Section |
+ * +----------------+----------------------------+------+----------------+
+ * | TXT.STS        | Status                     |   64 | B.1.1          |
+ * | TXT.STS        | Error Status               |   64 | B.1.2          |
+ * | TXT.ERRORCODE  | Error Code                 |   64 | B.1.3          |
+ * | TXT.DIDVID     | TXT Device ID              |   64 | B.1.7          |
+ * | TXT.VER.EMIF   | EMC Version Numer Register |   64 | B.1.8          |
+ * | TXT.SCRATCHPAD | ACM_POLICY_STATUS          |   64 | B.1.16         |
+ * | TXT.E2STS      | Extended Error Status      |   64 | B.1.24         |
+ * +----------------+----------------------------+------+----------------+
+ * /
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -19,9 +33,10 @@
 #define TXT_STS_OFFSET		0x000
 #define TXT_ESTS_OFFSET		0x008
 #define TXT_ERRORCODE_OFFSET	0x030
-#define TXT_VER_FSBIF_OFFSET	0x100
 #define TXT_DIDVID_OFFSET	0x110
-#define TXT_VER_QPIIF_OFFSET	0x200
+#define TXT_VER_EMIF_OFFSET	0x200
+#define TXT_SCRATCHPAD_OFFSET	0x378
+#define TXT_E2STS		0x8f0
 
 #define EXAMPLE_MSG "Hello, World!\n"
 #define MSG_BUFFER_LEN 15
