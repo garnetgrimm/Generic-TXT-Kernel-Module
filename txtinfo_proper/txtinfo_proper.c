@@ -30,6 +30,9 @@
 #define TXT_PRIV_CONFIG_REGS_BASE 0xfed20000
 #define TXT_NR_CONFIG_PAGES ((TXT_PUB_CONFIG_REGS_BASE - TXT_PRIV_CONFIG_REGS_BASE) >> PAGE_SHIFT)
 
+#define SL_DIR_ENTRY 0
+#define SL_FS_ENTRIES 8
+
 #define TXT_STS_OFFSET		0x000
 #define TXT_ESTS_OFFSET		0x008
 #define TXT_ERRORCODE_OFFSET	0x030
@@ -56,8 +59,7 @@ MODULE_AUTHOR("Garnet (GBOI) Grimm");
 MODULE_DESCRIPTION("Expose securityfs.");
 MODULE_VERSION("0.01");
 
-static struct dentry* folder;
-static struct dentry* file;
+static struct dentry *fs_entries[SL_FS_ENTRIES];
 
 static char msg_buffer[MSG_BUFFER_LEN];
 static char *msg_ptr;
@@ -94,22 +96,26 @@ DECLARE_PUB_SHOW(e2sts,TXT_E2STS_OFFSET,sizeof(u64));
 
 static int __init start_security(void)
 {
-	
-	//strncpy(msg_buffer, EXAMPLE_MSG, MSG_BUFFER_LEN);
 	snprintf(msg_buffer, MSG_BUFFER_LEN, EXAMPLE_MSG);
 	printk(KERN_INFO "Starting security module...\n");
-	printk(KERN_INFO "Log is %p\n", (void *)msg_ptr);
-	folder = securityfs_create_dir("supersecret",NULL);
-	file = securityfs_create_file("sts", S_IRUSR | S_IRGRP, folder, NULL, &sts_ops); 
+	fs_entries[SL_DIR_ENTRY] = securityfs_create_dir("securelaunch",NULL);
+	fs_entries[1] = securityfs_create_file("sts", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &sts_ops); 
+	fs_entries[2] = securityfs_create_file("ests", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &ests_ops); 
+	fs_entries[3] = securityfs_create_file("errorcode", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &errorcode_ops); 
+	fs_entries[4] = securityfs_create_file("didvid", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &didvid_ops); 
+	fs_entries[5] = securityfs_create_file("ver_emif", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &ver_emif_ops); 
+	fs_entries[6] = securityfs_create_file("scratchpad", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &scratchpad_ops); 
+	fs_entries[7] = securityfs_create_file("e2sts", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &e2sts_ops); 
 	printk(KERN_INFO "Started security module success!\n");
-	
 	return 0;
 }
 
 static void __exit stop_security(void) {
+	int i;
 	printk(KERN_INFO "Ending security module...\n");
-	securityfs_remove(file);
-	securityfs_remove(folder);
+	for(i = 0; i < SL_FS_ENTRIES; i++) {
+		securityfs_remove(fs_entries[i]);
+	}
 	printk(KERN_INFO "Succesfully ended security module\n");
 }
 
