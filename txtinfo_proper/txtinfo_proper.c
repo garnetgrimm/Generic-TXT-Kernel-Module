@@ -33,23 +33,30 @@
 #define SL_DIR_ENTRY 7
 #define SL_FS_ENTRIES 8
 
-#define TXT_STS_OFFSET		0x000
-#define TXT_ESTS_OFFSET		0x008
-#define TXT_ERRORCODE_OFFSET	0x030
-#define TXT_DIDVID_OFFSET	0x110
-#define TXT_VER_EMIF_OFFSET	0x200
-#define TXT_SCRATCHPAD_OFFSET	0x378
-#define TXT_E2STS_OFFSET	0x8f0
+#define TXT_CR_STS			0x0000
+#define TXT_CR_ESTS			0x0008
+#define TXT_CR_ERRORCODE		0x0030
+#define TXT_CR_CMD_RESET		0x0038
+#define TXT_CR_CMD_CLOSE_PRIVATE	0x0048
+#define TXT_CR_DIDVID			0x0110
+#define TXT_CR_VER_EMIF			0x0200
+#define TXT_CR_CMD_UNLOCK_MEM_CONFIG	0x0218
+#define TXT_CR_SINIT_BASE		0x0270
+#define TXT_CR_SINIT_SIZE		0x0278
+#define TXT_CR_MLE_JOIN			0x0290
+#define TXT_CR_HEAP_BASE		0x0300
+#define TXT_CR_HEAP_SIZE		0x0308
+#define TXT_CR_SCRATCHPAD		0x0378
+#define TXT_CR_CMD_OPEN_LOCALITY1	0x0380
+#define TXT_CR_CMD_CLOSE_LOCALITY1	0x0388
+#define TXT_CR_CMD_OPEN_LOCALITY2	0x0390
+#define TXT_CR_CMD_CLOSE_LOCALITY2	0x0398
+#define TXT_CR_CMD_SECRETS		0x08e0
+#define TXT_CR_CMD_NO_SECRETS		0x08e8
+#define TXT_CR_E2STS			0x08f0
 
-#define MSG_BUFFER_LEN 20
-
-#define DECLARE_PUB_SHOW(reg_name, reg_offset, reg_size)					\
-static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
-	return get_txt_info(reg_offset, reg_size, buffer);					\
-}												\
-static const struct file_operations reg_name##_ops = {						\
-	.read = reg_name##_read,								\
-};
+#define MSG_BUFFER_LEN 22
+#define MSG_ERROR "Mapping Error\n"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Garnet Grimm");
@@ -60,26 +67,56 @@ static struct dentry *fs_entries[SL_FS_ENTRIES];
 
 void __iomem *txt;
 
-static size_t get_txt_info(unsigned int offset, size_t size, char* buffer) {
+static void txt_info_to_buffer(unsigned int offset, size_t size, char* buf) {
 	void __iomem *txt;
+	char *format;
 	u64 sample;
+	memset(buf,0,sizeof(char)*MSG_BUFFER_LEN);
 	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES * PAGE_SIZE);	
 	if(!txt) {
-		printk(KERN_INFO "Error with ioremap\n");
+		snprintf(buf, MSG_BUFFER_LEN, MSG_ERROR);
+		pr_err("Error with ioremap\n");
+		return;
 	}
 	memcpy_fromio(&sample, txt + offset, size); 
 	iounmap(txt);
-	sprintf(buffer, "%#010llx\n", sample);
-	return 0;	
+	switch (size) {
+		case sizeof(u8):
+			format = "8:%#04llx\n";
+			break;
+		case sizeof(u16):
+			format = "1:%#06llx\n";
+			break;
+		case sizeof(u32):
+			format = "3:%#010llx\n";
+			break;
+		case sizeof(u64):
+			format = "6:%#018llx\n";
+			break;
+		default:
+			format = "invalid\n";
+	}
+	snprintf(buf, MSG_BUFFER_LEN, format, sample);	
 }
 
-DECLARE_PUB_SHOW(sts,TXT_STS_OFFSET,sizeof(u64));
-DECLARE_PUB_SHOW(ests,TXT_ESTS_OFFSET,sizeof(u8));
-DECLARE_PUB_SHOW(errorcode,TXT_ERRORCODE_OFFSET,sizeof(u32));
-DECLARE_PUB_SHOW(didvid,TXT_DIDVID_OFFSET,sizeof(u64));
-DECLARE_PUB_SHOW(ver_emif,TXT_VER_EMIF_OFFSET,sizeof(u32));
-DECLARE_PUB_SHOW(scratchpad,TXT_SCRATCHPAD_OFFSET,sizeof(u64));
-DECLARE_PUB_SHOW(e2sts,TXT_E2STS_OFFSET,sizeof(u64));
+#define DECLARE_PUB_READ(reg_name, reg_offset, reg_size)					\
+static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
+	char msg_buffer[MSG_BUFFER_LEN];							\
+	txt_info_to_buffer(reg_offset, reg_size, msg_buffer);					\
+	printk(KERN_INFO "%s", msg_buffer);							\
+	return simple_read_from_buffer(buffer, len, offset, &msg_buffer, MSG_BUFFER_LEN);	\
+}												\
+static const struct file_operations reg_name##_ops = {						\
+	.read = reg_name##_read,								\
+};
+
+DECLARE_PUB_READ(sts,TXT_CR_STS,sizeof(u64));
+DECLARE_PUB_READ(ests,TXT_CR_ESTS,sizeof(u8));
+DECLARE_PUB_READ(errorcode,TXT_CR_ERRORCODE,sizeof(u32));
+DECLARE_PUB_READ(didvid,TXT_CR_DIDVID,sizeof(u64));
+DECLARE_PUB_READ(e2sts,TXT_CR_E2STS,sizeof(u64));
+DECLARE_PUB_READ(ver_emif,TXT_CR_VER_EMIF,sizeof(u32));
+DECLARE_PUB_READ(scratchpad,TXT_CR_SCRATCHPAD,sizeof(u64));
 
 static int __init start_security(void)
 {
