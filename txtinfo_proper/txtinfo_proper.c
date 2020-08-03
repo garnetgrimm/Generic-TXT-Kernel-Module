@@ -30,9 +30,6 @@
 #define TXT_PRIV_CONFIG_REGS_BASE 0xfed20000
 #define TXT_NR_CONFIG_PAGES ((TXT_PUB_CONFIG_REGS_BASE - TXT_PRIV_CONFIG_REGS_BASE) >> PAGE_SHIFT)
 
-#define SL_DIR_ENTRY 7
-#define SL_FS_ENTRIES 8
-
 #define TXT_CR_STS			0x0000
 #define TXT_CR_ESTS			0x0008
 #define TXT_CR_ERRORCODE		0x0030
@@ -55,59 +52,61 @@
 #define TXT_CR_CMD_NO_SECRETS		0x08e8
 #define TXT_CR_E2STS			0x08f0
 
-#define MSG_BUFFER_LEN 22
-#define MSG_ERROR "Mapping Error\n"
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Garnet Grimm");
 MODULE_DESCRIPTION("Expose txt registers to userspace via securityfs.");
 MODULE_VERSION("0.01");
 
+#define MSG_BUFFER_LEN 20
+#define SL_FS_ENTRIES		11
+#define SL_ROOT_DIR_ENTRY	SL_FS_ENTRIES - 1 /* root directory node must be last */
+#define SL_TXT_DIR_ENTRY	SL_FS_ENTRIES - 2 
+#define SL_TXT_ENTRY_COUNT 		7
+
 static struct dentry *fs_entries[SL_FS_ENTRIES];
 
 void __iomem *txt;
 
-static void txt_info_to_buffer(unsigned int offset, size_t size, char* buf) {
+static long txt_info_to_buffer(unsigned int offset, size_t size, char* buf) {
 	void __iomem *txt;
-	char *format;
-	u64 sample;
+	u64 reg_value;
 	memset(buf,0,sizeof(char)*MSG_BUFFER_LEN);
 	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES * PAGE_SIZE);	
-	if(!txt) {
-		snprintf(buf, MSG_BUFFER_LEN, MSG_ERROR);
-		pr_err("Error with ioremap\n");
-		return;
+	if(IS_ERR(txt)) {
+		return PTR_ERR(txt);
 	}
-	memcpy_fromio(&sample, txt + offset, size); 
+	memcpy_fromio(&reg_value, txt + offset, size); 
 	iounmap(txt);
 	switch (size) {
 		case sizeof(u8):
-			format = "8:%#04llx\n";
+			snprintf(buf, MSG_BUFFER_LEN, "%#04x\n", (u8) reg_value);	
 			break;
 		case sizeof(u16):
-			format = "1:%#06llx\n";
+			snprintf(buf, MSG_BUFFER_LEN, "%#06x\n", (u16) reg_value);
 			break;
 		case sizeof(u32):
-			format = "3:%#010llx\n";
+			snprintf(buf, MSG_BUFFER_LEN, "%#010x\n", (u32) reg_value);
 			break;
 		case sizeof(u64):
-			format = "6:%#018llx\n";
+			snprintf(buf, MSG_BUFFER_LEN, "%#018llx\n", (u64) reg_value);
 			break;
 		default:
-			format = "invalid\n";
+			return -ENXIO;
 	}
-	snprintf(buf, MSG_BUFFER_LEN, format, sample);	
+	return 0;
 }
 
-#define DECLARE_PUB_READ(reg_name, reg_offset, reg_size)					\
-static ssize_t reg_name##_read(struct file *flip, char *buffer, size_t len, loff_t *offset) {	\
-	char msg_buffer[MSG_BUFFER_LEN];							\
-	txt_info_to_buffer(reg_offset, reg_size, msg_buffer);					\
-	printk(KERN_INFO "%s", msg_buffer);							\
-	return simple_read_from_buffer(buffer, len, offset, &msg_buffer, MSG_BUFFER_LEN);	\
-}												\
-static const struct file_operations reg_name##_ops = {						\
-	.read = reg_name##_read,								\
+
+#define DECLARE_PUB_READ(reg_name, reg_offset, reg_size)                                        \
+static ssize_t txt_##reg_name##_read(struct file *flip, char __user *buffer,                    \
+                size_t len, loff_t *offset) {                                                   \
+        char msg_buffer[MSG_BUFFER_LEN];                                                        \
+        memset(msg_buffer, 0, MSG_BUFFER_LEN);                                                  \
+        txt_info_to_buffer(reg_offset, reg_size, msg_buffer);                                   \
+        return simple_read_from_buffer(buffer, len, offset, &msg_buffer, MSG_BUFFER_LEN);       \
+}                                                                                               \
+static const struct file_operations reg_name##_ops = {                                          \
+        .read = txt_##reg_name##_read,                                                          \
 };
 
 DECLARE_PUB_READ(sts,TXT_CR_STS,sizeof(u64));
@@ -118,27 +117,94 @@ DECLARE_PUB_READ(e2sts,TXT_CR_E2STS,sizeof(u64));
 DECLARE_PUB_READ(ver_emif,TXT_CR_VER_EMIF,sizeof(u32));
 DECLARE_PUB_READ(scratchpad,TXT_CR_SCRATCHPAD,sizeof(u64));
 
+struct sfs_file {
+    int parent;
+    const char *name;
+    const struct file_operations *fops;
+};
+
+static const struct sfs_file sl_files[] = {
+    { SL_TXT_DIR_ENTRY, "sts", &sts_ops },
+    { SL_TXT_DIR_ENTRY, "ests", &ests_ops },
+    { SL_TXT_DIR_ENTRY, "errorcode", &errorcode_ops },
+    { SL_TXT_DIR_ENTRY, "didvid", &didvid_ops },
+    { SL_TXT_DIR_ENTRY, "ver_emif", &ver_emif_ops },
+    { SL_TXT_DIR_ENTRY, "scratchpad", &scratchpad_ops },
+    { SL_TXT_DIR_ENTRY, "e2sts", &e2sts_ops }
+};
+
+static int sl_create_file(int entry, int parent, const char *name, const struct file_operations *ops) {
+		if (entry < 0 || entry > SL_TXT_DIR_ENTRY) 
+			return -1;
+		fs_entries[entry] = securityfs_create_file(name, S_IRUSR | S_IRGRP, fs_entries[parent], NULL, ops);
+		if (IS_ERR(fs_entries[entry])) {
+			pr_err("Error creating securityfs %s file\n", name);
+			return PTR_ERR(fs_entries[entry]);
+		} else { 
+			return 0;
+		}
+	}
+
+static long expose_securityfs(void)
+{
+	long ret = 0;
+	int i = 0;
+
+	fs_entries[SL_ROOT_DIR_ENTRY] = securityfs_create_dir("slaunch", NULL);
+	if (IS_ERR(fs_entries[SL_ROOT_DIR_ENTRY])) {
+		pr_err("Error creating securityfs sl_evt_log directory\n");
+		ret = PTR_ERR(fs_entries[SL_ROOT_DIR_ENTRY]);
+		goto err;
+	}
+
+	if (true) {
+		fs_entries[SL_TXT_DIR_ENTRY] = securityfs_create_dir("txt", fs_entries[SL_ROOT_DIR_ENTRY]);
+		if (IS_ERR(fs_entries[SL_TXT_DIR_ENTRY])) {
+			pr_err("Error creating securityfs sl_evt_log directory\n");
+			ret = PTR_ERR(fs_entries[SL_TXT_DIR_ENTRY]);
+			goto err;
+		}
+	
+		for(i = 0; i < SL_TXT_ENTRY_COUNT; i++) {
+			ret = sl_create_file(SL_TXT_DIR_ENTRY - 1 - i, sl_files[i].parent, sl_files[i].name, sl_files[i].fops);
+			if (ret)
+				goto err_dir;
+		}
+	}
+
+	/*
+	if (sl_evtlog.addr > 0) {
+		ret = sl_create_file(0, sl_root_dir_entry, sl_evtlog.name, &sl_evtlog_ops);
+		if (ret)
+			goto err_dir;
+	}*/
+
+	return 0;
+
+err_dir:
+	for(i = 0; i <= SL_ROOT_DIR_ENTRY; i++)
+		securityfs_remove(fs_entries[i]);
+err:
+	return ret;
+}
+
+static void teardown_securityfs(void)
+{
+	int i;
+	for (i = 0; i < SL_FS_ENTRIES; i++)
+		securityfs_remove(fs_entries[i]);
+}
+
 static int __init start_security(void)
 {
 	printk(KERN_INFO "Starting security module...\n");
-	fs_entries[SL_DIR_ENTRY] = securityfs_create_dir("securelaunch",NULL);
-	fs_entries[0] = securityfs_create_file("txt_sts", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &sts_ops); 
-	fs_entries[1] = securityfs_create_file("txt_ests", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &ests_ops); 
-	fs_entries[2] = securityfs_create_file("txt_errorcode", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &errorcode_ops); 
-	fs_entries[3] = securityfs_create_file("txt_didvid", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &didvid_ops); 
-	fs_entries[4] = securityfs_create_file("txt_ver_emif", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &ver_emif_ops); 
-	fs_entries[5] = securityfs_create_file("txt_scratchpad", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &scratchpad_ops); 
-	fs_entries[6] = securityfs_create_file("txt_e2sts", S_IRUSR | S_IRGRP, fs_entries[SL_DIR_ENTRY], NULL, &e2sts_ops); 
+	expose_securityfs();
 	printk(KERN_INFO "Started security module success!\n");
 	return 0;
 }
 
 static void __exit stop_security(void) {
-	int i;
-	printk(KERN_INFO "Ending security module...\n");
-	for(i = 0; i < SL_FS_ENTRIES; i++) {
-		securityfs_remove(fs_entries[i]);
-	}
+	teardown_securityfs();
 	printk(KERN_INFO "Succesfully ended security module\n");
 }
 
